@@ -61,7 +61,18 @@ def parse_page_index(text):
     except JSONDecodeError:
         pass
 
-def get_page_detail(html, url):
+def get_page_detail(url):
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.text
+        return None
+    except ConnectionError:
+        print('Error occurred')
+        return None
+
+
+def parse_page_detail(html, url):
     soup = BeautifulSoup(html, 'lxml')
     result = soup.select('title')
     title = result[0].get_text if result else ''
@@ -78,3 +89,25 @@ def get_page_detail(html, url):
                 'url': url,
                 'images': images
             }
+
+
+def save_to_mongo(result):
+    if db[MONGO_TABLE].insert(result):
+        print('insert Successfully', result)
+        return True
+    return False
+
+def main(offset):
+    text = get_page_index(offset, KEYWORD)
+    urls = parse_page_index(text)
+    for url in urls:
+        html = get_page_detail(url)
+        result = parse_page_detail(html, url)
+        if result: save_to_mongo(result)
+
+if __name__ == '__main__':
+    pool = Pool()
+    groups = ([x*20 for x in range(GROUP_START, GROUP_END+1)])
+    pool.map(main, groups)
+    pool.close()
+    pool.join()
